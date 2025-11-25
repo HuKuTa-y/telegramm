@@ -60,7 +60,7 @@ base_dir = 'data'
 laws_dir = os.path.join(base_dir, 'laws')
 codeks_dir = os.path.join(base_dir, 'codeks')
 
-# Собираем все подпапки внутри 'laws' и 'codeks' в словарь для быстрого поиска
+# Собираем все подпапки внутри 'laws' и 'codeks' в один словарь для быстрого поиска
 folder_map = {}
 for parent_folder in [laws_dir, codeks_dir]:
     if os.path.exists(parent_folder):
@@ -97,6 +97,7 @@ async def process_article(session, item):
             content_text = 'Контент не найден'
             print(f"Не найден блок на странице: {link}")
 
+        # Ищем папку по номеру источника
         target_folder = folder_map.get(source_number)
         if target_folder:
             filename = f"{title}.txt"
@@ -112,10 +113,10 @@ async def process_article(session, item):
             print(f"Папка с номером '{source_number}' не найдена для статьи: {title}")
 
 async def main():
-    connector = aiohttp.TCPConnector(limit=20)  # лимит одновременных соединений
+    connector = aiohttp.TCPConnector(limit=20)
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = [process_article(session, item) for item in data]
         await asyncio.gather(*tasks)
 
-# Запускаем асинхронную обработку
+# Запуск
 asyncio.run(main())
