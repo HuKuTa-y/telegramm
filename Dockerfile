@@ -7,6 +7,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD "python parse_headers.py" 
-CMD "python parse_text_articles.py" 
-CMD "python tg.py"
+RUN python parse_headers.py 
+RUN python parse_text_articles.py 
+CMD ["python","tg.py"]
