@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -11,7 +10,6 @@ bot = telebot.TeleBot(TOKEN)
 
 user_states = {}
 
-# ... (ваши функции parse_info_block, get_folders, get_articles, sort_articles остаются без изменений) ...
 def parse_info_block(info_path):
     title = None
     link = None
@@ -45,10 +43,10 @@ def get_folders():
                             continue
     return folders
 
-def get_articles(folder_number):
+def get_articles(folder_name):
     articles = []
     for subdir in ['codeks', 'laws']:
-        folder_path = os.path.join(BASE_PATH, subdir, folder_number)
+        folder_path = os.path.join(BASE_PATH, subdir, folder_name)
         if os.path.isdir(folder_path):
             try:
                 for filename in os.listdir(folder_path):
@@ -81,10 +79,8 @@ def sort_articles(articles):
 @bot.message_handler(commands=['restart'])
 def restart_handler(message):
     bot.send_message(message.chat.id, "Перезапуск бота...")
-    # Завершаем текущий процесс и перезапускаем скрипт
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
-# Обработчик /help
 @bot.message_handler(commands=['help'])
 def help_handler(message):
     bot.send_message(
@@ -115,10 +111,16 @@ def callback_handler(call):
     if data == "back_to_folders":
         start_handler(call.message)
         bot.answer_callback_query(call.id)
+        return
 
     elif data.startswith("folder_"):
         folder_name = data[len("folder_"):]
-        user_states[user_id] = {'stage': 'waiting_article_or_keywords', 'folder_name': folder_name}
+        # Сохраняем состояние как "на уровне папки"
+        user_states[user_id] = {
+            'stage': 'waiting_article_or_keywords',
+            'folder_name': folder_name,
+            'prev_state': 'folder_list'
+        }
         articles = get_articles(folder_name)
         if not articles:
             bot.answer_callback_query(call.id, "Нет статей для этой папки.")
@@ -131,8 +133,7 @@ def callback_handler(call):
         for a in articles_sorted:
             display_name = a.rstrip('.')
             keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
-        # Добавляем кнопку "Назад" к списку статей
-        keyboard.add(InlineKeyboardButton("Назад", callback_data="back_to_folders"))
+        # Убрана кнопка "Назад"
         bot.edit_message_text("Выберите номер статьи:",
                               chat_id=user_id,
                               message_id=call.message.message_id,
@@ -168,10 +169,9 @@ def callback_handler(call):
                 parts_content = [file_content[i:i+max_length] for i in range(0, len(file_content), max_length)]
                 for part in parts_content:
                     bot.send_message(user_id, part)
-                # После статьи добавляем кнопку "Назад" к списку статей
-                keyboard = InlineKeyboardMarkup()
-                keyboard.add(InlineKeyboardButton("Назад", callback_data=f"back_{folder_name}"))
-                bot.send_message(user_id, "Для возврата к списку статей нажмите 'Назад'.", reply_markup=keyboard)
+                # Убрана кнопка "Вернуться к списку статей"
+                # Можно оставить сообщение без кнопки или добавить другую логику.
+                bot.send_message(user_id, "Для возврата к списку статей введите /start или повторите выбор папки.")
             else:
                 bot.send_message(user_id, f"Статья {article_number} не найдена.")
 
@@ -191,8 +191,12 @@ def callback_handler(call):
 
         elif len(parts) == 3 and parts[0] == 'back':
             folder_name = parts[1]
+            user_states[user_id] = {
+                'stage': 'waiting_article_or_keywords',
+                'folder_name': folder_name,
+                'prev_state': 'article_view'
+            }
             # Возврат к списку статей
-            user_states[user_id] = {'stage': 'waiting_article_or_keywords', 'folder_name': folder_name}
             articles = get_articles(folder_name)
             if not articles:
                 bot.answer_callback_query(call.id, "Нет статей для этой папки.")
@@ -205,8 +209,7 @@ def callback_handler(call):
             for a in articles_sorted:
                 display_name = a.rstrip('.')
                 keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
-            # Добавляем кнопку "Назад" к списку статей
-            keyboard.add(InlineKeyboardButton("Назад", callback_data="back_to_folders"))
+            # Убрана кнопка "Назад"
             bot.edit_message_text("Выберите номер статьи:",
                                   chat_id=user_id,
                                   message_id=call.message.message_id,
@@ -251,55 +254,44 @@ def handle_message(message):
             user_states.pop(user_id, None)
             bot.send_message(user_id, "Введите /start для нового поиска.", reply_markup=None)
 
-# Остальные случаи без изменений
-
-# Обработка кнопки "Назад" из текста статьи к списку статей (убрана)
-@bot.callback_query_handler(func=lambda call: call.data.startswith("back_articles_"))
-def back_to_articles(call):
-    user_id = call.message.chat.id
-    data = call.data
-    folder_name = data[len("back_articles_"):]
-    user_states[user_id] = {'stage': 'waiting_article_or_keywords', 'folder_name': folder_name}
-    articles = get_articles(folder_name)
-    if not articles:
-        bot.answer_callback_query(call.id, "Нет статей для этой папки.")
-        return
-    try:
-        articles_sorted = sort_articles(articles)
-    except:
-        articles_sorted = sorted(articles)
-    keyboard = InlineKeyboardMarkup()
-    for a in articles_sorted:
-        display_name = a.rstrip('.')
-        keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
-    # Не добавляем кнопку "Назад"
-    bot.edit_message_text("Выберите номер статьи:",
-                          chat_id=user_id,
-                          message_id=call.message.message_id,
-                          reply_markup=keyboard)
-
-# === Новое: обработчики "Назад" после выбора кодекса и статьи ===
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("back_"))
 def handle_back(call):
     user_id = call.message.chat.id
     data = call.data
-    # Например, data может быть "back_foldername" или "back_articles_foldername"
-    if data.startswith("back_"):
-        # Определим, куда возвращать
-        parts = data.split('_')
-        if len(parts) >= 2:
-            # Возвращаем к списку папок
-            start_handler(call.message)
+    # Обработка возврата
+    if data == "back_to_folders":
+        start_handler(call.message)
+        bot.answer_callback_query(call.id)
+    elif data.startswith("back_to_articles_"):
+        # Возврат к списку статей выбранной папки
+        parts = data.split('_', 3)
+        if len(parts) == 4:
+            folder_name = parts[3]
+            user_states[user_id] = {
+                'stage': 'waiting_article_or_keywords',
+                'folder_name': folder_name,
+                'prev_state': 'article_list'
+            }
+            articles = get_articles(folder_name)
+            if not articles:
+                bot.answer_callback_query(call.id, "Нет статей для этой папки.")
+                return
+            try:
+                articles_sorted = sort_articles(articles)
+            except:
+                articles_sorted = sorted(articles)
+            keyboard = InlineKeyboardMarkup()
+            for a in articles_sorted:
+                display_name = a.rstrip('.')
+                keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
+            # Убрана кнопка "Назад"
+            bot.edit_message_text("Выберите номер статьи:",
+                                  chat_id=user_id,
+                                  message_id=call.message.message_id,
+                                  reply_markup=keyboard)
         else:
-            # По умолчанию — к списку папок
-            start_handler(call.message)
-    # Ответим, чтобы убрать "часики"
-    bot.answer_callback_query(call.id)
-
-# Также обновим обработчик "back" из статьи — сделаем его через кнопку "Назад" с callback_data="back_{folder_name}"
-# В основном коде при выводе статьи добавим кнопку "Назад" как показано выше.
-
-# Всё остальное — без изменений.
+            bot.answer_callback_query(call.id)
+    else:
+        bot.answer_callback_query(call.id)
 
 bot.polling()
