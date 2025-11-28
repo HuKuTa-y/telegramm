@@ -75,12 +75,6 @@ def sort_articles(articles):
                 main = 0
             return (2, main)
     return sorted(articles, key=sort_key)
-
-@bot.message_handler(commands=['restart'])
-def restart_handler(message):
-    bot.send_message(message.chat.id, "Перезапуск бота...")
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
 @bot.message_handler(commands=['help'])
 def help_handler(message):
     bot.send_message(
@@ -90,7 +84,6 @@ def help_handler(message):
         "/help — показать это сообщение\n\n"
         "Используйте кнопки для навигации по спискам и статьям."
     )
-
 @bot.message_handler(commands=['start'])
 def start_handler(message):
     folders = get_folders()
@@ -100,7 +93,7 @@ def start_handler(message):
     keyboard = InlineKeyboardMarkup()
     for folder in folders:
         keyboard.add(InlineKeyboardButton(folder['name'], callback_data=f"folder_{folder['folder_name']}"))
-    bot.send_message(message.chat.id, "Выберите название коллекции:", reply_markup=keyboard)
+    bot.send_message(message.chat.id, "Выберите категорию:", reply_markup=keyboard)
     user_states[message.chat.id] = {'stage': 'waiting_folder', 'folders_list': folders}
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -169,8 +162,6 @@ def callback_handler(call):
                 parts_content = [file_content[i:i+max_length] for i in range(0, len(file_content), max_length)]
                 for part in parts_content:
                     bot.send_message(user_id, part)
-                # Убрана кнопка "Вернуться к списку статей"
-                # Можно оставить сообщение без кнопки или добавить другую логику.
                 bot.send_message(user_id, "Для возврата к списку статей введите /start или повторите выбор папки.")
             else:
                 bot.send_message(user_id, f"Статья {article_number} не найдена.")
@@ -209,8 +200,7 @@ def callback_handler(call):
             for a in articles_sorted:
                 display_name = a.rstrip('.')
                 keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
-            # Убрана кнопка "Назад"
-            bot.edit_message_text("Выберите номер статьи:",
+            bot.edit_message_text("Выберите номер статьи или введите ключевые слова:",
                                   chat_id=user_id,
                                   message_id=call.message.message_id,
                                   reply_markup=keyboard)
@@ -284,7 +274,6 @@ def handle_back(call):
             for a in articles_sorted:
                 display_name = a.rstrip('.')
                 keyboard.add(InlineKeyboardButton(f"Статья {display_name}", callback_data=f"article_{a}_{folder_name}"))
-            # Убрана кнопка "Назад"
             bot.edit_message_text("Выберите номер статьи:",
                                   chat_id=user_id,
                                   message_id=call.message.message_id,
@@ -294,4 +283,10 @@ def handle_back(call):
     else:
         bot.answer_callback_query(call.id)
 
-bot.polling()
+# Запускаем бота бесконечно
+while True:
+    try:
+        bot.polling(none_stop=True)
+    except Exception as e:
+        print(f"Ошибка: {e}")
+               
