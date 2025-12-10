@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Проверка наличия файла и прав
-RUN ls -l tg.py
+
 
 COPY . .
 
